@@ -4,6 +4,44 @@ require 'kconv'
 require_relative 'httpclient'
 
 module FC2
+  class Session
+    attr_accessor :client, :ssid, :pay, :account
+    def initialize hash = nil
+      @client = HTTPClient.new({:agent_name=>'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.9'})
+      @ssid = hash && hash["ssid"] || {}
+      @pay = hash && hash["pay"]
+    end
+
+    def login account = nil
+      if account
+        @account = account
+      end
+      client = @client
+      client.cookies["secure.id.fc2.com"] = @ssid
+      client.cookies["id.fc2.com"] = @ssid
+      client.cookies["video.fc2.com"] = @ssid
+
+      res = client.post("https://secure.id.fc2.com/index.php?mode=login&switch_language=ja", @account)
+      unless res.body.index("http://id.fc2.com/?login=done")
+        return false
+      end
+      res = client.get("http://id.fc2.com/?login=done")
+      res = client.get("https://secure.id.fc2.com/?done=video&switch_language=ja")
+      if res.body =~/(http:\/\/video.fc2.com\/mem_login.php[^"\s]+)/mi
+        puts $1
+        res = client.get($1)
+      end
+
+      if res['location'].index("/logoff.php")
+        # http://video.fc2.com/logoff.php
+        p res['location']
+        return false
+      end
+
+      return true
+    end
+  end
+
   class Video
     attr_accessor :url, :upid, :title, :file_url, :ext
     def initialize url
@@ -13,13 +51,19 @@ module FC2
     end
 
     def loadinfo session=nil
-      client = HTTPClient.new({:agent_name=>'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.9'})
+      @session = session
+      client = session.client
       if session
-        client.cookies["video.fc2.com"] = session["ssid"]
-        @pay = session["pay"]
+        client.cookies["video.fc2.com"] = session.ssid
+        @pay = session.pay
       end
 
       r = client.get(@url)
+
+      if session.account && r.body.index("<body onload=\"loadLoginInfo('0')\"")
+        session.login
+        r = client.get(@url)
+      end
 
       gkarray = []
       r.body.scan(/<script[^>]*>(.*?)<\/script>/mi) {|js|
@@ -49,20 +93,15 @@ module FC2
 
       @file_url = ""+params["filepath"] + "?mid=" + params["mid"]
       @ext = (params["filepath"].match(/\.\w+$/)||[""])[0]
-      @client = client
     end
 
     def download_request &block
-        @client.request_get(@file_url, nil, &block)
+        @session.client.request_get(@file_url, nil, &block)
     end
 
     def download &block
-        return @client.get(@file_url, nil, &block)
+        return @session.client.get(@file_url, nil, &block)
     end
-  end
-
-  def self.login account
-    puts "unimplemented."
   end
 
   def self.video url,session=nil

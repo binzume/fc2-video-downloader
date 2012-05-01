@@ -10,14 +10,20 @@ unless url
 end
 
 
-# TODO: login
-conf_file = File.dirname(__FILE__) + '/session.yaml'
-session = YAML.load_file(conf_file)
-#account = YAML.load_file(conf_file)
-#session = FC2.login(account)
-#open(conf_file, "w") {|f|
-# f.write(YAML.dump(session))
-#}
+account_file = File.dirname(__FILE__) + '/account.yaml'
+session_file = File.dirname(__FILE__) + '/session.yaml'
+
+if File.exists?(session_file)
+  session = FC2::Session.new(YAML.load_file(session_file))
+else
+  session = FC2::Session.new
+end
+
+if File.exists?(account_file)
+  account = YAML.load_file(account_file)
+  session.account = account
+  # session.login(account)
+end
 
 # get video info
 v = FC2.video(ARGV[0], session)
@@ -25,18 +31,23 @@ v = FC2.video(ARGV[0], session)
 #puts title
 #puts video_url
 
+# TODO: save session
+#open(session_file, "w") {|f|
+# f.write(YAML.dump(session.hash))
+#}
+
 # Download video
 begin
-  fname = v.upid+"_" + v.title.gsub(/[\?"\&<>\|]/,"_")
-  puts fname + v.ext
+  fname = v.upid+"_" + v.title.gsub(/[\?"\&<>\|\/\\\*\{\}]/,"_")
+  puts "file: " + fname + v.ext
   tmp = fname+"_part"+v.ext
   f = open(tmp,"wb")
 
   v.download_request{|res|
-    len = 0
     size = res['content-length'].to_i
-    p res.code
+    purs "status:" + res.code
     puts "size: "+size.to_s
+    len = 0
     res.read_body{|d|
       len += d.length
       print "\b\b\b\b\b\b\b\b\b\b\b\b\b"+ (len/(1024)).to_s + "KB"
