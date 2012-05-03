@@ -32,9 +32,9 @@ v = FC2.video(ARGV[0], session)
 #puts video_url
 
 # TODO: save session
-#open(session_file, "w") {|f|
-# f.write(YAML.dump(session.hash))
-#}
+open(session_file, "w") {|f|
+ f.write(YAML.dump(session.hash))
+}
 
 # Download video
 begin
@@ -45,7 +45,7 @@ begin
 
   v.download_request{|res|
     size = res['content-length'].to_i
-    purs "status:" + res.code
+    puts "status:" + res.code
     puts "size: "+size.to_s
     len = 0
     res.read_body{|d|

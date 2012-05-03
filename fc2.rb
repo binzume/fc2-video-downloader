@@ -40,6 +40,9 @@ module FC2
 
       return true
     end
+    def hash
+        return {"pay"=>@pay,"ssid"=>{"PHPSESSID" => client.cookies["video.fc2.com"]["PHPSESSID"].toutf8}}
+    end
   end
 
   class Video
@@ -47,15 +50,21 @@ module FC2
     def initialize url
       @url = url
       @upid = (url.match(/\/content.*\/([^\/]+)/)||[])[1]
+      @title = (url.match(/\/content\/([^\/]+)/)||[])[1]
+      if @title && @title != @upid
+        @title = URI.decode(@title).toutf8
+      else
+        @title = ""
+      end
       @pay = false
     end
 
     def loadinfo session=nil
       @session = session
+      @pay = session.pay
       client = session.client
-      if session
+      if session.ssid
         client.cookies["video.fc2.com"] = session.ssid
-        @pay = session.pay
       end
 
       r = client.get(@url)
@@ -74,7 +83,10 @@ module FC2
         end
       }
 
-      @title = ""
+      if r.body =~ /\/flv3_payment\.swf/
+        @pay = true
+      end
+
       if r.body =~ /<meta property="og:title" content="([^"]+)">/
         @title = $1.gsub(/["\&<>\|]/,"_").toutf8
       end
@@ -87,10 +99,12 @@ module FC2
         ginfourl = "http://video.fc2.com/ginfo_payment.php?upid="+@upid
       end
       ginfourl += "&v="+@upid + "&mimi=" + @mimi + "&gk=" + @gk
-
       pr = client.get(ginfourl)
       params = Hash[ pr.body.split("&").map{|kv| kv.split("=",2)} ]
-
+      if params["err_code"]
+        p params
+        return
+      end
       @file_url = ""+params["filepath"] + "?mid=" + params["mid"]
       @ext = (params["filepath"].match(/\.\w+$/)||[""])[0]
     end
