@@ -26,7 +26,7 @@ if File.exists?(account_file)
 end
 
 # get video info
-v = FC2.video(ARGV[0], session)
+v = FC2.video(ARGV[0], session, true)
 #puts v.file_url
 #puts title
 #puts video_url
@@ -38,13 +38,21 @@ open(session_file, "w") {|f|
 
 # Download video
 begin
-  fname = v.upid+"_" + v.title.gsub(/[\?"\&<>\|\/\\\*\{\}]/,"_")
+  fname = v.upid+"_" + v.title.gsub(/[\?"\&<>\|\/\\\*\{\}:]/,"_")
   puts "file: " + fname + v.ext
   tmp = fname+"_part"+v.ext
   f = open(tmp,"wb")
 
+  redirect = nil
+
   v.download_request{|res|
     size = res['content-length'].to_i
+    p res['location']
+    redirect = res['location']
+    if redirect
+      v.file_url = redirect
+      break
+    end
     puts "status:" + res.code
     puts "size: "+size.to_s
     len = 0
@@ -58,9 +66,36 @@ begin
       f.write(d)
     }
   }
+
+  if redirect
+  # retry
+  v.download_request{|res|
+    size = res['content-length'].to_i
+    p res['location']
+    redirect = res['location']
+    if redirect
+      v.file_url = redirect
+      return
+    end
+    puts "status:" + res.code
+    puts "size: "+size.to_s
+    len = 0
+    res.read_body{|d|
+      len += d.length
+      print "\b\b\b\b\b\b\b\b\b\b\b\b\b"+ (len/(1024)).to_s + "KB"
+      if size && size>0
+        print " " + (len*100/size).to_i.to_s + "%"
+      end
+      STDOUT.flush
+      f.write(d)
+    }
+  }
+
+  end
+
   f.close
 
-  File.rename(tmp, fname+".mp4")
+  File.rename(tmp, fname+v.ext)
 rescue Interrupt
   puts "Abort."
 end

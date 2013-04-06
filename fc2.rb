@@ -59,7 +59,7 @@ module FC2
       @pay = false
     end
 
-    def loadinfo session=nil
+    def loadinfo session=nil, pay = nil
       @session = session
       @pay = session.pay
       client = session.client
@@ -86,6 +86,9 @@ module FC2
       if r.body =~ /\/flv3_payment\.swf/
         @pay = true
       end
+      if pay != nil
+        @pay = pay
+      end
 
       if r.body =~ /<meta property="og:title" content="([^"]+)">/
         @title = $1.gsub(/["\&<>\|]/,"_").toutf8
@@ -93,19 +96,22 @@ module FC2
 
       @mimi = Digest::MD5.new.update(@upid + '_gGddgPfeaf_gzyr') . to_s;
       @gk = gkarray.join
-
-      ginfourl = "http://video.fc2.com/ginfo.php?upid="+@upid
       if @pay
         ginfourl = "http://video.fc2.com/ginfo_payment.php?upid="+@upid
+      else
+        ginfourl = "http://video.fc2.com/ginfo.php?upid="+@upid
       end
       ginfourl += "&v="+@upid + "&mimi=" + @mimi + "&gk=" + @gk
       pr = client.get(ginfourl)
       params = Hash[ pr.body.split("&").map{|kv| kv.split("=",2)} ]
-      if params["err_code"]
+      if params["err_code"] && params["err_code"] != "" || params["filepath"] == ""
         p params
         return
       end
       @file_url = ""+params["filepath"] + "?mid=" + params["mid"]
+      if params["cdnt"]
+        @file_url += "&px-time=" + params["cdnt"] + "&px-hash=" + params["cdnh"]
+      end
       @ext = (params["filepath"].match(/\.\w+$/)||[""])[0]
     end
 
@@ -118,9 +124,9 @@ module FC2
     end
   end
 
-  def self.video url,session=nil
+  def self.video url,session=nil, pay = nil
     video = Video.new(url)
-    video.loadinfo(session)
+    video.loadinfo(session , pay)
     return video
   end
 end
