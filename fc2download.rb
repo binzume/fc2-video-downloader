@@ -26,7 +26,7 @@ if File.exists?(account_file)
 end
 
 # get video info
-v = FC2.video(ARGV[0], session, true)
+v = FC2.video(ARGV[0], session)
 #puts v.file_url
 #puts title
 #puts video_url
